@@ -3,25 +3,22 @@ import shutil
 import os
 import uuid
 from typing import List
+from config import STORAGE_PATH
 
 router = APIRouter(prefix="/files", tags=["Files"])
-
-STORAGE_PATH = "../storage"
 
 @router.post("/upload")
 async def upload_file(file: UploadFile = File(...)):
     try:
-        # Generate unique filename to avoid conflicts
-        file_ext = os.path.splitext(file.filename)[1]
-        unique_filename = f"{uuid.uuid4()}{file_ext}"
-        file_location = os.path.join(STORAGE_PATH, unique_filename)
+        # Use original filename for user friendliness
+        # In a real production app, we would sanitize this or use a DB mapping
+        file_location = os.path.join(STORAGE_PATH, file.filename)
         
         with open(file_location, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
             
         return {
             "filename": file.filename,
-            "stored_filename": unique_filename,
             "path": file_location,
             "message": "File uploaded successfully"
         }

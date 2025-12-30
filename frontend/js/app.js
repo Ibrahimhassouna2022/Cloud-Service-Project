@@ -1,4 +1,6 @@
-const API_URL = "http://localhost:8000";
+// Detect environment: If running from file system (local), use localhost.
+// If running from a server (Cloud/DigitalOcean), use relative path.
+const API_URL = window.location.protocol === 'file:' ? 'http://localhost:8000' : '';
 
 async function uploadFile() {
     const fileInput = document.getElementById('fileInput');
@@ -129,7 +131,7 @@ async function showResults(jobId) {
         downloadLink.style.display = 'inline-block';
         downloadLink.textContent = "Download Results JSON";
 
-        // Check if it's benchmark result
+        // 1. Benchmark Results (Scalability)
         if (result.speedup && result.efficiency) {
             document.getElementById('benchmarkResults').style.display = 'block';
             const tbody = document.getElementById('benchmarkBody');
@@ -145,22 +147,123 @@ async function showResults(jobId) {
                 `;
                 tbody.appendChild(tr);
             });
-            
-            // Also show raw JSON
-            const pre = document.createElement('pre');
-            pre.textContent = JSON.stringify(result, null, 2);
-            resultsDiv.appendChild(pre);
-            
-        } else {
-            // Normal Result
-            const pre = document.createElement('pre');
-            pre.textContent = JSON.stringify(result, null, 2);
-            resultsDiv.appendChild(pre);
+        } 
+        
+        // 2. Descriptive Statistics
+        if (result.rows && result.columns) {
+            let html = `
+                <div class="stat-box">
+                    <p><strong>Total Rows:</strong> ${result.rows}</p>
+                    <p><strong>Total Columns:</strong> ${result.columns}</p>
+                </div>
+                <h4>Column Data Types</h4>
+                ${createTableFromObject(result.column_types, "Column", "Type")}
+                
+                <h4>Null Value Counts</h4>
+                ${createTableFromObject(result.null_counts, "Column", "Null Count")}
+            `;
+
+            if (result.statistics) {
+                html += `<h4>Basic Statistics (Numeric Columns)</h4>`;
+                html += `<table class="styled-table"><thead><tr><th>Column</th><th>Min</th><th>Max</th><th>Mean</th></tr></thead><tbody>`;
+                for (const [col, stats] of Object.entries(result.statistics)) {
+                    html += `<tr>
+                        <td>${col}</td>
+                        <td>${stats.min}</td>
+                        <td>${stats.max}</td>
+                        <td>${parseFloat(stats.mean).toFixed(4)}</td>
+                    </tr>`;
+                }
+                html += `</tbody></table>`;
+            }
+            resultsDiv.innerHTML += html;
+            return;
         }
+
+        // 3. Machine Learning - Linear Regression
+        if (result.algorithm === "linear_regression") {
+            let html = `<h4>Linear Regression Results</h4>
+            <ul>
+                <li><strong>RMSE:</strong> ${result.rmse}</li>
+                <li><strong>R2 (R-Squared):</strong> ${result.r2}</li>
+                <li><strong>Intercept:</strong> ${result.intercept}</li>
+                <li><strong>Coefficients:</strong> ${result.coefficients}</li>
+            </ul>`;
+            resultsDiv.innerHTML += html;
+            return;
+        }
+
+        // 4. Machine Learning - Logistic Regression
+        if (result.algorithm === "logistic_regression") {
+             let html = `<h4>Logistic Regression Results</h4>
+            <ul>
+                <li><strong>Accuracy:</strong> ${result.accuracy}</li>
+                <li><strong>Area Under ROC:</strong> ${result.areaUnderROC}</li>
+            </ul>`;
+            resultsDiv.innerHTML += html;
+            return;
+        }
+
+        // 5. Machine Learning - KMeans
+        if (result.algorithm === "kmeans") {
+            let html = `<h4>KMeans Clustering Results</h4>`;
+            if (result.cluster_centers) {
+                html += `<h5>Cluster Centers</h5>`;
+                result.cluster_centers.forEach((center, idx) => {
+                    html += `<p><strong>Cluster ${idx}:</strong> [${center.map(v => v.toFixed(4)).join(", ")}]</p>`;
+                });
+            }
+            resultsDiv.innerHTML += html;
+            return;
+        }
+
+        // 6. Machine Learning - FPGrowth
+        if (result.algorithm === "fpgrowth") {
+            let html = `<h4>FPGrowth Association Rules</h4>`;
+            
+            if (result.frequent_items) {
+                html += `<h5>Top Frequent Items</h5>`;
+                html += `<table class="styled-table"><thead><tr><th>Items</th><th>Freq</th></tr></thead><tbody>`;
+                result.frequent_items.forEach(item => {
+                     html += `<tr><td>${item.items.join(", ")}</td><td>${item.freq}</td></tr>`;
+                });
+                html += `</tbody></table>`;
+            }
+
+            if (result.association_rules) {
+                html += `<h5>Top Association Rules</h5>`;
+                html += `<table class="styled-table"><thead><tr><th>Antecedent</th><th>Consequent</th><th>Confidence</th><th>Lift</th></tr></thead><tbody>`;
+                result.association_rules.forEach(rule => {
+                     html += `<tr>
+                        <td>${rule.antecedent.join(", ")}</td>
+                        <td>${rule.consequent.join(", ")}</td>
+                        <td>${parseFloat(rule.confidence).toFixed(4)}</td>
+                        <td>${parseFloat(rule.lift).toFixed(4)}</td>
+                     </tr>`;
+                });
+                html += `</tbody></table>`;
+            }
+            resultsDiv.innerHTML += html;
+            return;
+        }
+
+        // Fallback for errors or unknown
+        const pre = document.createElement('pre');
+        pre.textContent = JSON.stringify(result, null, 2);
+        resultsDiv.appendChild(pre);
 
     } catch (error) {
         console.error("Error fetching results:", error);
     }
+}
+
+function createTableFromObject(obj, headerKey, headerVal) {
+    let html = `<table class="styled-table"><thead><tr><th>${headerKey}</th><th>${headerVal}</th></tr></thead><tbody>`;
+    for (const [key, value] of Object.entries(obj)) {
+        html += `<tr><td>${key}</td><td>${value}</td></tr>`;
+    }
+    html += `</tbody></table>`;
+    return html;
 }
 
 // Initial load

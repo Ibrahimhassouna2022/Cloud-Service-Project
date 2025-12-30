@@ -4,6 +4,7 @@ import json
 import uuid
 import time
 import threading
+from config import STORAGE_PATH, SPARK_MASTER
 
 # Map job types to script paths
 JOB_SCRIPTS = {
@@ -22,15 +23,13 @@ class SparkManager:
         if not script:
             raise ValueError(f"Unknown job type: {job_type}")
 
-        input_path = f"../storage/{filename}"
-        output_path = f"../storage/{job_id}_results.json"
-        
-        # Default to local[*] for normal runs
-        master = "local[*]"
+        # Construct absolute paths
+        input_path = os.path.join(STORAGE_PATH, filename)
+        output_path = os.path.join(STORAGE_PATH, f"{job_id}_results.json")
         
         args = [
             "spark-submit",
-            "--master", master,
+            "--master", SPARK_MASTER,
             script,
             "--input", input_path,
             "--output", output_path,
@@ -56,15 +55,13 @@ class SparkManager:
     def submit_benchmark(job_type: str, filename: str, params: dict = {}):
         """
         Runs the job 4 times sequentially on 1, 2, 4, 8 cores and records time.
+        Note: We use local[N] to simulate N Nodes/Machines in a pseudo-distributed mode.
         """
         job_id = str(uuid.uuid4())
         script = JOB_SCRIPTS.get(job_type)
         
         if not script:
             raise ValueError(f"Unknown job type: {job_type}")
-
-        # We will start a background thread to run the benchmark strictly sequentially
-        # because running them in parallel would ruin the performance metrics.
         
         JOBS[job_id] = {
             "status": "RUNNING",
@@ -81,25 +78,26 @@ class SparkManager:
         }
 
         def run_benchmark_thread(jid, script_path, fname, prms):
-            input_path = f"../storage/{fname}"
-            base_output_path = f"../storage/{jid}"
+            input_path = os.path.join(STORAGE_PATH, fname)
+            base_output_path = os.path.join(STORAGE_PATH, jid)
             
+            # Simulate cluster of 1, 2, 4, 8 machines using cores
             cores_list = [1, 2, 4, 8]
             times = {}
             
             try:
                 for cores in cores_list:
                     # Update status
-                    JOBS[jid]["current_run"] = f"Running on {cores} cores..."
+                    JOBS[jid]["current_run"] = f"Simulating Cluster with {cores} Machine(s)..."
                     
-                    # distinct output for each run (optional, or just overwrite)
-                    run_output = f"{base_output_path}_cores_{cores}.json"
+                    # distinct output for each run
+                    run_output = f"{base_output_path}_mnt_{cores}.json"
                     
                     start_time = time.time()
                     
                     cmd = [
                         "spark-submit",
-                        "--master", f"local[{cores}]",
+                        "--master", f"local[{cores}]", # Simulating N workers
                         script_path,
                         "--input", input_path,
                         "--output", run_output,
